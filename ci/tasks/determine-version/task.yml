@@ -1,0 +1,40 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: paymentshubrebels/bosh-utils
+    tag: 'latest'
+
+inputs:
+  - name: tarball
+  - name: versions
+  - name: running-version
+  - name: bumped-version
+
+outputs:
+- name: target
+
+run:
+  path: /bin/bash
+  args:
+    - -exc
+    - |
+      set -x
+      releases_version=$(cat versions/versions.yml | grep _sha1)
+      deployment_version_file=tarball/deployment/vars_file/versions.yml
+
+      echo "Check if previous deployed version file exits"
+      if [[ -f $deployment_version_file ]]; then
+        deployment_version=$(cat $deployment_version_file | grep _sha1)
+      else
+        deployment_version="empty"
+      fi
+
+      echo "compare previous deployment releases version and current releases version"
+      if [[ $releases_version != $deployment_version ]]; then
+        cp bumped-version/version target/
+      else
+        cp running-version/version target/
+      fi

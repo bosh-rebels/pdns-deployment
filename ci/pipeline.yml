@@ -1,0 +1,155 @@
+s3_config: &s3_config
+  access_key_id: ((s3_access_key_id))
+  secret_access_key: ((s3_secret_access_key))
+  region_name: ((s3_region))
+  bucket: payhub-dev-bosh-releases
+
+resource_types:
+- name: bosh-deployment
+  type: docker-image
+  source:
+    repository: cloudfoundry/bosh-deployment-resource
+
+resources:
+- name: pdns-deployment
+  type: git
+  source:
+    uri: https://github.com/bosh-rebels/pdns-deployment
+    branch: master
+    
+- name: ubuntu-xenial
+  type: bosh-io-stemcell
+  source:
+    name: bosh-aws-xen-hvm-ubuntu-xenial-go_agent
+    version_family: ((stemcell_version))
+
+- name: deploy-release
+  type: bosh-deployment
+  source: &release-deployment
+    deployment: ((deployment_name))
+    target: ((bosh_target))
+    client: ((bosh_client))
+    client_secret: ((bosh_client_secret))
+    ca_cert: ((bosh_ca_cert))
+
+- name: remove-deployment
+  type: bosh-deployment
+  source: 
+    <<: *release-deployment
+
+- name: pdns-compiled-release
+  type: s3
+  source:
+    <<: *s3_config
+    regexp: "pdns/pdns-(.*)-ubuntu-xenial-((stemcell_version))-.*.tgz"
+
+- name: pdns-deployment-tarball
+  type: s3
+  source:
+    <<: *s3_config
+    regexp: "deployments/((deployment_name))/((deployment_name))-(.*).tgz"
+    initial_path: "deployments/((deployment_name))/((deployment_name))-0.0.0.tgz"
+
+- name: running-version
+  type: semver
+  source:
+    driver: s3
+    <<: *s3_config
+    initial_version: 0.0.1
+    key: deployments/((deployment_name))/version
+
+- name: bumped-version
+  type: semver
+  source:
+    driver: s3
+    <<: *s3_config
+    key: deployments/((deployment_name))/version
+
+- name: target-version
+  type: semver
+  source:
+    driver: s3
+    <<: *s3_config
+    key: deployments/((deployment_name))/target/version
+
+- name: cleanup-trigger
+  type: semver
+  source:
+    driver: s3
+    initial_version: 0.0.0
+    <<: *s3_config
+    key: deployments/((deployment_name))/trigger
+
+jobs:
+- name: deploy-pdns
+  plan:
+  - get: pdns-deployment
+    trigger: true
+  - get: pdns-compiled-release
+    trigger: true
+  - get: ubuntu-xenial
+  - get: pdns-deployment-tarball
+    params: { unpack: true }
+  - get: running-version
+  - get: bumped-version
+    params: {bump: patch}
+
+  - task: generate-pdns-version-file
+    file: pdns-deployment/ci/tasks/generate-version-file/task.yml
+    input_mapping:
+      release: pdns-compiled-release
+    output_mapping:
+      versions: pdns-version
+    params:
+      release_name: pdns
+
+  - task: determine-version
+    file: pdns-deployment/ci/tasks/determine-version/task.yml
+    input_mapping:
+      tarball: pdns-deployment-tarball
+      versions: vars_files
+  - put: target-version
+    params: {file: target/version}
+  - put: deploy-release
+    params:
+      manifest: pdns-deployment/manifest.yml
+      stemcells:
+      - ubuntu-xenial/*.tgz
+      releases:
+      - pdns-compiled-release/*.tgz
+      vars:
+        deployment_name: ((deployment_name))
+        deployment: ((deployment_name))
+        stemcell_os: ubuntu-xenial
+        stemcell_version: ((stemcell_version))
+        pdns_instances: 1
+        pdns_vm_type: default
+        pdns_persistent_disk_type: default
+        pdns_network: default
+
+  - task: export-deployment
+    file: pdns-deployment/ci/tasks/export-releases/task.yml
+    params:
+      deployment: ((deployment_name))
+      BOSH_ENVIRONMENT: ((bosh_target))
+      BOSH_CA_CERT: ((bosh_ca_cert))
+      BOSH_CLIENT: ((bosh_client))
+      BOSH_CLIENT_SECRET: ((bosh_client_secret))
+  - put: pdns-deployment-tarball
+    params:
+      file: tarball/*.tgz
+  - put: running-version
+    params: {file: target/version}
+  ensure:
+    put: cleanup-trigger
+    params: { bump: patch }
+
+- name: delete-pdns-deployment
+  plan:
+  - get: cleanup-trigger
+    trigger: true
+  - put: remove-deployment
+    params:
+      delete:
+        enabled: true
+        force: true

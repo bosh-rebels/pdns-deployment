@@ -1,0 +1,54 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: paymentshubrebels/bosh-utils
+    tag: 'latest'
+
+params:
+  deployment:
+  stemcell_os: ubuntu-xenial    
+  BOSH_ENVIRONMENT:
+  BOSH_CA_CERT:
+  BOSH_CLIENT:
+  BOSH_CLIENT_SECRET:
+
+inputs:
+  - name: pdns-deployment
+  - name: ubuntu-xenial
+  - name: vars_files
+  - name: target-version
+outputs:
+  - name: tarball
+
+run:
+  path: /bin/bash
+  args:
+    - -exc
+    - |
+      set -x
+      stemcell_version=$(cat ubuntu-xenial/version)
+      deployment_version=$(cat target-version/version)
+      
+      bosh -d "$deployment" manifest > manifest.yml
+
+      release_list=$(ruby pdns-deployment/ci/tasks/export-releases/release_version.rb)
+
+      mkdir -p deployment/{releases,stemcells,vars_file}
+      for release in $release_list; do
+        bosh -d "$deployment" \
+          export-release "${release}" "${stemcell_os}/${stemcell_version}" \
+          --dir=deployment/releases/
+      done
+
+      cp ubuntu-xenial/stemcell.tgz deployment/stemcells/
+      cp pdns-deployment/manifest.yml deployment/
+      
+      echo "stemcell_os: ${stemcell_os}" >> vars_files/versions.yml
+      echo "stemcell_version: ${stemcell_version}" >> vars_files/versions.yml
+      cp vars_files/versions.yml deployment/vars_file/
+
+      tar -cvf "${deployment}-${deployment_version}.tgz" deployment/*
+      mv "${deployment}-${deployment_version}.tgz" tarball/      

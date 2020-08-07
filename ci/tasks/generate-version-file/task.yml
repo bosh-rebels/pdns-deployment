@@ -1,0 +1,31 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: paymentshubrebels/bosh-utils
+    tag: 'latest'
+
+inputs:
+  - name: release
+  - name: versions
+    optional: true
+outputs:
+  - name: versions
+params: 
+  release_name:
+
+run:
+  path: /bin/bash
+  args:
+    - -exc
+    - |
+      set -x
+      version=$(cat release/version)
+      sha1=$(sha1sum release/*.tgz | awk '{print $1}')
+
+      echo "${release_name}_version: ${version}" >> versions/versions.yml
+      echo "${release_name}_sha1: ${sha1}" >> versions/versions.yml
+
+      cat versions/versions.yml
