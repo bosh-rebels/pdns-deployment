@@ -1,0 +1,54 @@
+---
+name: ((deployment))
+
+releases:
+- name: pdns
+  version: ((pdns_version))
+  sha1: ((pdns_sha1))
+
+stemcells:
+- os: ((stemcell_os))
+  alias: default
+  version: ((stemcell_version))
+
+instance_groups:
+- name: pdns
+  instances: ((pdns_instances))
+  azs: ((azs))
+  vm_type: ((pdns_vm_type))
+  persistent_disk_type: ((pdns_persistent_disk_type))
+  stemcell: default
+  networks:
+  - name: ((pdns_network))
+
+  jobs:
+  - name: pdns
+    release: pdns
+    properties:
+      sqlite:
+        database: dns.db
+      pdns_conf: |
+        launch=gsqlite3
+        gsqlite3-database=/var/vcap/store/pdns/dns.db
+        do-ipv6-additional-processing=no
+        local-address=0.0.0.0:53
+        only-notify=0.0.0.0/0
+        webserver=true
+        webserver-address=0.0.0.0
+        webserver-allow-from=0.0.0.0/0
+        api=yes
+        api-key=((api_key))
+  - name: smoke-test
+    release: pdns
+    properties: {}
+
+variables:
+  - name: api_key
+    type: password
+
+update:
+  canaries: 1
+  max_in_flight: 10
+  serial: false
+  canary_watch_time: 1000-60000
+  update_watch_time: 1000-60000
