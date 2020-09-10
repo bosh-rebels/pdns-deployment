@@ -1,8 +1,8 @@
-s3_config: &s3_config
+s3_bucket_binary: &s3_bucket_binary
   access_key_id: ((s3_access_key_id))
   secret_access_key: ((s3_secret_access_key))
   region_name: ((s3_region))
-  bucket: payhub-dev-bosh-releases
+  bucket: ((s3_bucket_binary))
 
 resource_types:
 - name: bosh-deployment
@@ -16,7 +16,7 @@ resources:
   source:
     uri: https://github.com/bosh-rebels/pdns-deployment
     branch: master
-    
+
 - name: ubuntu-xenial
   type: bosh-io-stemcell
   source:
@@ -34,19 +34,19 @@ resources:
 
 - name: remove-deployment
   type: bosh-deployment
-  source: 
+  source:
     <<: *release-deployment
 
 - name: pdns-compiled-release
   type: s3
   source:
-    <<: *s3_config
+    <<: *s3_bucket_binary
     regexp: "pdns/pdns-(.*)-ubuntu-xenial-((stemcell_version))-.*.tgz"
 
 - name: pdns-deployment-tarball
   type: s3
   source:
-    <<: *s3_config
+    <<: *s3_bucket_binary
     regexp: "deployments/((deployment_name))/((deployment_name))-(.*).tgz"
     initial_path: "deployments/((deployment_name))/((deployment_name))-0.0.0.tgz"
 
@@ -54,7 +54,7 @@ resources:
   type: semver
   source:
     driver: s3
-    <<: *s3_config
+    <<: *s3_bucket_binary
     initial_version: 0.0.1
     key: deployments/((deployment_name))/version
 
@@ -62,14 +62,14 @@ resources:
   type: semver
   source:
     driver: s3
-    <<: *s3_config
+    <<: *s3_bucket_binary
     key: deployments/((deployment_name))/version
 
 - name: target-version
   type: semver
   source:
     driver: s3
-    <<: *s3_config
+    <<: *s3_bucket_binary
     key: deployments/((deployment_name))/target/version
 
 - name: cleanup-trigger
@@ -77,7 +77,7 @@ resources:
   source:
     driver: s3
     initial_version: 0.0.0
-    <<: *s3_config
+    <<: *s3_bucket_binary
     key: deployments/((deployment_name))/trigger
 
 jobs:
