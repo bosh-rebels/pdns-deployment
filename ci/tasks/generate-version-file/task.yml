@@ -4,7 +4,7 @@ platform: linux
 image_resource:
   type: docker-image
   source:
-    repository: paymentshubrebels/bosh-utils
+    repository: your-repo/bosh-utils
     tag: 'latest'
 
 inputs:
@@ -13,7 +13,7 @@ inputs:
     optional: true
 outputs:
   - name: versions
-params: 
+params:
   release_name:
 
 run:
