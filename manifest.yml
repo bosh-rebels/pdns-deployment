@@ -20,7 +20,6 @@ instance_groups:
   stemcell: default
   networks:
   - name: ((pdns_network))
-    static_ips: ((pdns_static_ips))
 
   jobs:
   - name: pdns
@@ -28,7 +27,7 @@ instance_groups:
     properties:
       pdns:
         api_key: ((api_key))
-
+        
   - name: smoke-test
     release: pdns
 
